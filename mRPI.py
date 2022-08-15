@@ -6,7 +6,8 @@
 ## Henrique Garcia
 ##
 
-from scipy.spatial import ConvexHull, convex_hull_plot_2d
+from xmlrpc.client import boolean
+from scipy.spatial import ConvexHull, convex_hull_plot_2d, HalfspaceIntersection
 import numpy as np
 import matplotlib.pyplot as plt
 import itertools
@@ -18,6 +19,32 @@ Matrix = np.array
 def E(w:np.array) -> ConvexHull:
 
     return ConvexHull(list(itertools.product(*w)))
+
+def Event_Set(HP:np.array, Acl:np.array, w:np.array) -> ConvexHull:
+    
+    w_plus = np.array([[w[0,0]],[w[1,0]]])
+    w_minus = np.array([[w[0,1]],[w[1,1]]])
+
+    H = HP[:,:-1]
+    P = np.reshape(HP[:,-1],(H.shape[0],1))
+
+    P_plus = P - np.dot(H, w_plus)
+    P_minus = P - np.dot(H, w_minus)
+
+    P_new = np.concatenate((P_plus,P_minus),axis=0)
+    H_new = np.concatenate((H,H),axis=0)
+
+    halfspaces = np.concatenate((H_new,P_new), axis=1)
+
+    return h2v_representation(halfspaces, np.array([0.0,0.0]))
+
+def h2v_representation(HP:np.array, inner_point:np.array) -> ConvexHull:
+    
+    #halfspaces = np.concatenate(H,P,axis=1)
+
+    hs = HalfspaceIntersection(HP, inner_point)
+
+    return ConvexHull(np.asarray(list(zip(*hs.intersections))).transpose())
 
 def getBoundary(convex_hull:ConvexHull) -> SetOfPoints:
     return np.array(list(map(lambda i: list(convex_hull.points[i]), convex_hull.vertices)))
@@ -41,79 +68,68 @@ def mRPI(Acl:Matrix, w:SetOfPoints, I:SetOfPoints, max_iteration:int = 10) -> Co
 
         PHI = matrix_dot_set(Acl, PHI)
         PHI = Minkowski(PHI,EW)
-        
+                
         #yield PHI
 
     return PHI
 
+def whether_inside(matrix_inequality:Matrix, vector:np.array) -> boolean:
+
+    '''
+    Returns whether or not the point is inside the envelope
+    True: It is inside
+    False: It is NOT inside
+    '''
+
+    statement = True
+    
+    for lines in matrix_inequality:
+
+        result = np.inner(lines[:-1],vector) - lines[-1]
+        if result < 0: statement = False
+
+    return statement
+
 def main():
 
-    Acl = np.array([[-2, 0],
-                    [0, -1]])
+    ## Inputs ##
+    
+    # Dynamic controled matrix (eig must lie inside the unit circle)
+    Acl = np.array([[0.879, 0.393],
+                    [-0.374, 0.209]])
 
-    w = np.array([[1,-1],[5,4]])
+    # Disturbances ranges (a n-uple for each system dimension)
+    w = np.array([[0.211,-0.211],[0.65,-0.65]])
 
-    points = np.array([[-5.5, 1.1],
-                       [-5.2, -0.6],
-                       [-6.5, -1],
-                       [-7,-2],
-                       [-9,12]])
+    # First RPI guess set vertices
+    I = np.array([[5,-5],[5,-5]])
 
-    points_x = np.array([[5, 1],
-                         [5.3, -0.5],
-                         [6.6, -1.2]])
+    # Just to see if the selected point lies inside the calculated mRPI
+    test_point = np.array([0.5,1.075])
 
-    points_hull = ConvexHull(points)
+    ## Code per se
 
-    plt.plot(points[:,0], points[:,1], 'o')
-    for simplex in points_hull.simplices:
-        plt.plot(points[simplex, 0], points[simplex, 1], 'k-')
+    phi = mRPI(Acl, w, I, 50)
 
-    points_hull_x = ConvexHull(points_x)
+    #print(whether_inside(phi.equations, test_point))
 
-    plt.plot(points_x[:,0], points_x[:,1], 'o')
-    for simplex in points_hull_x.simplices:
-        plt.plot(points_x[simplex, 0], points_x[simplex, 1], 'k-')
+    ES = Event_Set(np.array(phi.equations), Acl, w)
 
+    plt.figure()
+    for simplex in phi.simplices:
+        plt.plot(phi.points[simplex, 0], phi.points[simplex, 1], 'k-')
+    plt.grid(True)
 
-    #print(hull.equations)
-    #print(hull.vertices)
-    #print(hull.points)
-
-    #ACL_phi = matrix_dot_set(hull, Acl)
-
-    #points2 = getBoundary(ACL_phi)
-
-    E(w)
-
-    mink = Minkowski(points_hull, points_hull_x)
-
-    points2 = getBoundary(mink)
-
-    plt.plot(points2[:,0], points2[:,1], 'o')
-    for simplex in mink.simplices:
-        plt.plot(mink.points[simplex, 0], mink.points[simplex, 1], 'k-')
+    for simplex in ES.simplices:
+        plt.plot(ES.points[simplex, 0], ES.points[simplex, 1], 'r--')
+    plt.grid(True)
 
     plt.show()
 
 if __name__ == '__main__':
-    
-    Acl = np.array([[0.879, 0.393],
-                    [-0.374, 0.209]])
 
-    w = np.array([[0.211,-0.211],[0.65,-0.65]])
+    main()
 
-    I = np.array([[5,-5],[5,-5]])
 
-    plt.figure()
 
-    #for phi in mRPI(Acl, w, I,100):
-    #    for simplex in phi.simplices:
-    #        plt.plot(phi.points[simplex, 0], phi.points[simplex, 1], 'k-')
-    
-    phi = mRPI(Acl, w, I, 5000)
-    for simplex in phi.simplices:
-        plt.plot(phi.points[simplex, 0], phi.points[simplex, 1], 'k-')
-    plt.grid(True)
-    plt.show()
 
