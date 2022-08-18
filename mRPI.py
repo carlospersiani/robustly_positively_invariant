@@ -20,7 +20,7 @@ def E(w:np.array) -> ConvexHull:
 
     return ConvexHull(list(itertools.product(*w)))
 
-def Event_Set(HP:np.array, Acl:np.array, w:np.array) -> ConvexHull:
+def Event_Set(HP:np.array, Aol:np.array, w:np.array) -> ConvexHull:
     
     w_plus = np.array([[w[0,0]],[w[1,0]]])
     w_minus = np.array([[w[0,1]],[w[1,1]]])
@@ -31,12 +31,37 @@ def Event_Set(HP:np.array, Acl:np.array, w:np.array) -> ConvexHull:
     P_plus = P - np.dot(H, w_plus)
     P_minus = P - np.dot(H, w_minus)
 
+    HA = np.dot(H, Aol)
+
     P_new = np.concatenate((P_plus,P_minus),axis=0)
-    H_new = np.concatenate((H,H),axis=0)
+    H_new = np.concatenate((HA,HA),axis=0)
 
     halfspaces = np.concatenate((H_new,P_new), axis=1)
 
     return h2v_representation(halfspaces, np.array([0.0,0.0]))
+
+def Event_Set_2(HP:np.array, Aol:np.array, w:np.array) -> ConvexHull:
+    
+    w_plus = np.array([[w[0,0]],[w[1,0]]])
+    w_minus = np.array([[w[0,1]],[w[1,1]]])
+
+    H = HP[:,:-1]
+    P = np.reshape(HP[:,-1],(H.shape[0],1))
+
+    E_star = Aol + np.eye(Aol.shape[0])
+
+    P_plus = P - np.dot(np.dot(H,E_star), w_plus)
+    P_minus = P - np.dot(np.dot(H,E_star), w_minus)
+
+    HAA = np.dot(np.dot(H, Aol), Aol)
+
+    P_new = np.concatenate((P_plus,P_minus),axis=0)
+    H_new = np.concatenate((HAA,HAA),axis=0)
+
+    halfspaces = np.concatenate((H_new,P_new), axis=1)
+
+    return h2v_representation(halfspaces, np.array([0,0]))
+
 
 def h2v_representation(HP:np.array, inner_point:np.array) -> ConvexHull:
     

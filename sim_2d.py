@@ -71,12 +71,15 @@ def main():
     # test_point = np.array([0.5,1.075])
 
     # Initial position
-    x = np.array([0,0])
+    x = np.array([0.84,-0.3])
     u = 0
+
+    Dyn = Dynamics()
 
     phi = mRPI.mRPI(Acl, w, I, 50)
 
-    ES = mRPI.Event_Set(np.array(phi.equations), Acl, w)
+    ES = mRPI.Event_Set_2(np.array(phi.equations), Dyn.Aol, w)
+    #ES = mRPI.Event_Set(np.array(phi.equations), Dyn.Acl, w)
 
     plt.figure()
 
@@ -87,8 +90,6 @@ def main():
     for simplex in ES.simplices:
         plt.plot(ES.points[simplex, 0], ES.points[simplex, 1], 'r--')
     plt.grid(True)
-
-    Dyn = Dynamics()
 
     X1 = [x[0]]
     X2 = [x[1]]
