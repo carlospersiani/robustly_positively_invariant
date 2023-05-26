@@ -7,6 +7,9 @@
 ##
 
 import scipy
+# reference: PhD thesis from Bruno BOISSEAU entitled "Event-based control: application to robotic systems" (https://www.theses.fr/2017GREAT037.pdf), advisors Nicolas MARCHAND and John-Jairo MARTINEZ-MOLINA
+
+from enum import Enum, auto
 from xmlrpc.client import boolean
 from scipy.spatial import ConvexHull, convex_hull_plot_2d, HalfspaceIntersection
 import numpy as np
@@ -43,12 +46,18 @@ def E(w:np.array) -> ConvexHull:
     return ConvexHull(list(itertools.product(*w)))
 
 def Event_Set(HP:np.array, Aol:np.array, w:np.array) -> ConvexHull:
-    
-    w_plus = np.array([[w[0,0]],[w[1,0]]])
-    w_minus = np.array([[w[0,1]],[w[1,1]]])
+    # HP is a [A ; B] matrix where Ax<B  is the collection of equations that defines the halfspace expected to be the mRPI for a dynamic system
+
+    amount_of_equations = HP.shape[0]
+    amount_of_dimensions = HP.shape[1]-1
+
+    #w_plus = np.array([[w[0,0]],[w[1,0]]])
+    w_plus = np.reshape(w[:,0],(amount_of_dimensions,1))
+    #w_minus = np.array([[w[0,1]],[w[1,1]]])
+    w_minus = np.reshape(w[:,1],(amount_of_dimensions,1))
 
     H = HP[:,:-1]
-    P = np.reshape(HP[:,-1],(H.shape[0],1))
+    P = np.reshape(HP[:,-1],(amount_of_equations,1))
 
     P_plus = P - np.dot(H, w_plus)
     P_minus = P - np.dot(H, w_minus)
@@ -82,11 +91,11 @@ def Event_Set_2(HP:np.array, Aol:np.array, w:np.array) -> ConvexHull:
 
     halfspaces = np.concatenate((H_new,P_new), axis=1)
 
-    return h2v_representation(halfspaces, np.array([0,0]))
+    return h2v_representation(halfspaces, np.array([0.0,0.0]))
 
-<<<<<<< HEAD
+# Attempt to use 3x3 system failed: too much RAM needed (around 60,000 equations)
 def Event_Set_3(HP:np.array, Aol:np.array, w:np.array) -> ConvexHull:
-    
+   
     w_plus = np.array([[w[0,0]],[w[1,0]]])
     w_minus = np.array([[w[0,1]],[w[1,1]]])
 
@@ -106,13 +115,11 @@ def Event_Set_3(HP:np.array, Aol:np.array, w:np.array) -> ConvexHull:
     halfspaces = np.concatenate((H_new,P_new), axis=1)
 
     return h2v_representation(halfspaces, np.array([0,0]))
-=======
->>>>>>> 81574d53993bf5def78f180de44c8dd2734b427b
 
 def h2v_representation(HP:np.array, inner_point:np.array) -> ConvexHull:
     
     #halfspaces = np.concatenate(H,P,axis=1)
-
+    print(inner_point)
     hs = HalfspaceIntersection(HP, inner_point)
 
     return ConvexHull(np.asarray(list(zip(*hs.intersections))).transpose())
@@ -130,17 +137,33 @@ def Minkowski(convex_hull_a:ConvexHull, convex_hull_b:ConvexHull) -> ConvexHull:
 
     return ConvexHull(np.asarray(list(map(lambda i : list(convex_hull_a.points[i[0]] + convex_hull_b.points[i[1]]), xablau))))
     
-def mRPI(Acl:Matrix, w:SetOfPoints, I:SetOfPoints, max_iteration:int = 10) -> ConvexHull:
+def mRPI(Acl:Matrix, w:SetOfPoints, I:SetOfPoints, max_iteration:int = 10, plot_RPI=True) -> ConvexHull:
 
+    # set that contains the disturbances
     EW:SetOfPoints = E(w)
+
+    # initial guess for the Robust Positively Invariant (RPI) set
     PHI:Union[SetOfPoints,ConvexHull] = E(I)
 
-    for i in range(max_iteration):
 
+    # iteration to improve the RPI staring from its initial guess. as the number of interactions approach inifity, RPI will actually be the exact Minimal Robust Positively Invariant (mPRI) set
+    for i in range(max_iteration):
+        # next RPI set will be PHI(next) = MinkowskiSum(Acl*PHI(current), EW)
+
+        # performs the Acl*Phi(current)
         PHI = matrix_dot_set(Acl, PHI)
+        # apply minkowski sum on EW and the result of the line above
         PHI = Minkowski(PHI,EW)
-                
+
         #yield PHI
+
+    if plot_RPI:
+        fig, ax = plt.subplots(1)
+        convex_hull_plot_2d(PHI,ax)
+        fig.canvas.draw()
+        fig.show()
+        plt.pause(.05)
+
 
     return PHI
 
@@ -156,30 +179,55 @@ def whether_inside(ES:ConvexHull, x:np.array) -> boolean:
     return hull_path.contains_point(x)
 
 
+class SystemType(Enum):
+    TwoByTwo = auto()
+    ThreeByThree = auto()
+
+
 def main():
 
     ## Inputs ##
-    
+
     # Open Loop matrix 
     Aol = np.array([[1.000, 0.650],
                     [0.000, 1.000]])
 
-    # Dynamic controled matrix A - BK 
-    Acl = np.array([[0.879, 0.393],
-                    [-0.374, 0.209]])
+	B=np.array([[.211],[.65]])
+	K=np.array([[.575, 1.217]])
+    # Dynamic controled matrix A - BK (eig must lie inside the unit circle)
+	Acl = Aol-B*K
+	#Acl = np.array([[0.879, 0.393],
+	#                [-0.374, 0.209]])
 
     # Disturbances ranges (here E is eye(dim(x)))
     w = np.array([[0.211,-0.211],[0.65,-0.65]])
 
-    # First RPI guess set vertices
-    I = np.array([[5,-5],[5,-5]])
+	# Disturbances ranges (a n-uple for each system dimension)
+	w = np.array([[0.211,-0.211],[0.65,-0.65]])
 
     # See if the selected point lies inside the calculated mRPI
     test_point = np.array([0.5,1.075])
 
-    ## Code per se ##
+    elif system == SystemType.ThreeByThree:
+        # Dynamic controled matrix (eig must lie inside the unit circle)
+        Acl = np.array([[0.879, 0.393, .01],
+                        [-0.374, 0.209, .01],
+                        [0, 0.2, .51]])
 
-    phi = mRPI(Acl, w, I, 50)
+        # Disturbances ranges (an n-uple for each system dimension)
+        w = np.array([[0.211,-0.211],[0.65,-0.65], [-.1, .1]])
+
+        # First RPI guess set vertices
+        I = np.array([[5,-5],[5,-5], [0.1, -.1]])
+
+        # Just to see if the selected point lies inside the calculated mRPI
+        test_point = np.array([0.5,1.075, .05])
+    else:
+        print(f"system should be \"2x2\" or \"3x3\". Currently system is: {system}")
+
+    ## Code per se
+    #phi is the set of states as infinity
+    phi = mRPI(Acl, w, I, 50, plot_RPI=False)
 
     #print(whether_inside(phi.equations, test_point))
 
