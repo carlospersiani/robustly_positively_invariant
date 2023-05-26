@@ -84,6 +84,7 @@ def Event_Set_2(HP:np.array, Aol:np.array, w:np.array) -> ConvexHull:
 
     return h2v_representation(halfspaces, np.array([0,0]))
 
+<<<<<<< HEAD
 def Event_Set_3(HP:np.array, Aol:np.array, w:np.array) -> ConvexHull:
     
     w_plus = np.array([[w[0,0]],[w[1,0]]])
@@ -105,6 +106,8 @@ def Event_Set_3(HP:np.array, Aol:np.array, w:np.array) -> ConvexHull:
     halfspaces = np.concatenate((H_new,P_new), axis=1)
 
     return h2v_representation(halfspaces, np.array([0,0]))
+=======
+>>>>>>> 81574d53993bf5def78f180de44c8dd2734b427b
 
 def h2v_representation(HP:np.array, inner_point:np.array) -> ConvexHull:
     
