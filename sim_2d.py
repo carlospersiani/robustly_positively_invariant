@@ -16,16 +16,23 @@ class Dynamics(object):
 
     def __init__(self):
         
-        self.Aol = np.array([[1.000, 0.650],
+        h = 0.05
+        J = 0.015
+
+        self.Aol = np.array([[1.000, h],
                              [0.000, 1.000]])
 
-        self.B = np.array([0.211,
-                           0.650])
+        self.B = np.array([[0],
+                           [h/J]])
+        
+        self.Q = 100*np.diag([1, 1])
+        self.R = np.eye(1)
+        
+        self.K = mRPI.dlqr(self.Aol, self.B, self.Q, self.R)
 
-        self.K = - np.array([0.575, 1.217])
+        #self.K = np.array([[-0.29259347, -0.31462942]])
 
-        self.Acl = np.array([[0.879, 0.393],
-                             [-0.374, 0.209]])
+        self.Acl = self.Aol + np.dot(self.B, self.K)
 
     def update(self,x:np.array, u:np.array, w:np.array) -> np.array:
 
@@ -48,21 +55,13 @@ def disturbances(bound1:np.array, bound2:np.array) -> np.array:
     if rand2 > bound2[0]: rand2 = bound2[0]
     if rand2 < bound2[1]: rand2 = bound2[1]
 
-    return np.array([rand1, rand2])
+    return np.array([[rand1], [rand2]])
 
 def main():
 
-    # Dynamic controled matrix (eig must lie inside the unit circle)
-    Acl = np.array([[0.879, 0.393],
-                    [-0.374, 0.209]])
-
-    #print(abs(eig(Acl)[0][0]))
-    #print(abs(eig(Acl)[0][1]))
-
     # Disturbances ranges (a n-uple for each system dimension)
-    w = np.array([[0.211,-0.211],[0.65,-0.65]])
-    w = np.array([[0.1,-0.1],[0.3,-0.3]])
-    w1 = np.array([[0.07,-0.07],[0.35,-0.35]])
+    w = np.array([[0.3,-0.3],
+                  [0.3,-0.3]])
 
     # First RPI guess set vertices
     I = np.array([[5,-5],[5,-5]])
@@ -71,13 +70,15 @@ def main():
     # test_point = np.array([0.5,1.075])
 
     # Initial position
-    x = np.array([0,0])
+    x = np.array([[2],[2]])
     u = 0
 
-    phi = mRPI.mRPI(Acl, w, I, 50)
+    Dyn = Dynamics()
 
-    ES = mRPI.Event_Set(np.array(phi.equations), Acl, w)
+    phi = mRPI.mRPI(Dyn.Acl, w, I, 50)
 
+    ES = mRPI.Event_Set(np.array(phi.equations), Dyn.Aol, w)
+    
     plt.figure()
 
     for simplex in phi.simplices:
@@ -87,20 +88,20 @@ def main():
     for simplex in ES.simplices:
         plt.plot(ES.points[simplex, 0], ES.points[simplex, 1], 'r--')
     plt.grid(True)
-
-    Dyn = Dynamics()
-
+    
     X1 = [x[0]]
     X2 = [x[1]]
     U = [u]
 
     count= 0
 
-    for i in range(1000):
+    iterations = 100
+
+    for i in range(iterations):
 
         x = Dyn.update(x, u, w)
         
-        if not mRPI.whether_inside(np.array(ES.equations),x): 
+        if not mRPI.whether_inside(ES,x): 
             u = Dyn.control(x)
             count += 1
         else: 
@@ -110,35 +111,36 @@ def main():
         X2.append(x[1])
         U.append(u)
 
-    print(count)
+    print("Update Rate", (count*100/iterations), "%")
 
-    plt.plot(X1,X2,'*b-')
+    plt.plot(X1,X2,'*k-')
     plt.xlabel(r'$x_{1}$ State')
     plt.ylabel(r'$x_{2}$ State')
+    plt.grid(True)
+    #plt.xlim([-5,5])
+    #plt.ylim([-5,5])
     plt.axis("Equal")
 
-    plt.figure()
-    plt.plot(X1, 'k')
-    plt.xlabel('Time Scale [ ]')
-    plt.ylabel(r'$x_{1}$ State')
-    plt.grid(True)
+    # plt.figure()
+    # plt.plot(X1, 'k')
+    # plt.xlabel('Time Scale [ ]')
+    # plt.ylabel(r'$x_{1}$ State')
+    # plt.grid(True)
 
-    plt.figure()
-    plt.plot(X2, 'k')
-    plt.xlabel('Time Scale [ ]')
-    plt.ylabel(r'$x_{2}$ State')
-    plt.grid(True)
+    # plt.figure()
+    # plt.plot(X2, 'k')
+    # plt.xlabel('Time Scale [ ]')
+    # plt.ylabel(r'$x_{2}$ State')
+    # plt.grid(True)
 
-    plt.figure()
-    plt.plot(U, 'k-*')
-    plt.xlabel('Time Scale [ ]')
-    plt.ylabel(r'$u$ Input')
-    plt.grid(True)
+    # plt.figure()
+    # plt.plot(U, 'k-*')
+    # plt.xlabel('Time Scale [ ]')
+    # plt.ylabel(r'$u$ Input')
+    # plt.grid(True)
 
     plt.show()
 
 if __name__ == '__main__':
 
     main()
-
-

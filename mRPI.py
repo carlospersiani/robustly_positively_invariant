@@ -6,21 +6,43 @@
 ## Henrique Garcia
 ##
 
+import scipy
 from xmlrpc.client import boolean
 from scipy.spatial import ConvexHull, convex_hull_plot_2d, HalfspaceIntersection
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.path import Path
 import itertools
 from typing import List, Text, Union
 
 SetOfPoints = np.array
 Matrix = np.array
 
+def dlqr(A,B,Q,R):
+
+    """Solve the discrete time lqr controller.
+     
+    x[k+1] = A x[k] + B u[k]
+     
+    cost = sum x[k].T*Q*x[k] + u[k].T*R*u[k]
+    """
+    #ref Bertsekas, p.151
+     
+    #first, try to solve the ricatti equation
+    X = np.matrix(scipy.linalg.solve_discrete_are(A, B, Q, R))
+     
+    #compute the LQR gain
+    K = np.matrix(scipy.linalg.inv(B.T*X*B+R)*(B.T*X*A))
+     
+    #eigVals, eigVecs = scipy.linalg.eig(A-B*K)
+     
+    return K
+
 def E(w:np.array) -> ConvexHull:
 
     return ConvexHull(list(itertools.product(*w)))
 
-def Event_Set(HP:np.array, Acl:np.array, w:np.array) -> ConvexHull:
+def Event_Set(HP:np.array, Aol:np.array, w:np.array) -> ConvexHull:
     
     w_plus = np.array([[w[0,0]],[w[1,0]]])
     w_minus = np.array([[w[0,1]],[w[1,1]]])
@@ -31,12 +53,58 @@ def Event_Set(HP:np.array, Acl:np.array, w:np.array) -> ConvexHull:
     P_plus = P - np.dot(H, w_plus)
     P_minus = P - np.dot(H, w_minus)
 
+    HA = np.dot(H, Aol)
+
     P_new = np.concatenate((P_plus,P_minus),axis=0)
-    H_new = np.concatenate((H,H),axis=0)
+    H_new = np.concatenate((HA,HA),axis=0)
 
     halfspaces = np.concatenate((H_new,P_new), axis=1)
 
     return h2v_representation(halfspaces, np.array([0.0,0.0]))
+
+def Event_Set_2(HP:np.array, Aol:np.array, w:np.array) -> ConvexHull:
+    
+    w_plus = np.array([[w[0,0]],[w[1,0]]])
+    w_minus = np.array([[w[0,1]],[w[1,1]]])
+
+    H = HP[:,:-1]
+    P = np.reshape(HP[:,-1],(H.shape[0],1))
+
+    E_star = Aol + np.eye(Aol.shape[0])
+
+    P_plus = P - np.dot(np.dot(H,E_star), w_plus)
+    P_minus = P - np.dot(np.dot(H,E_star), w_minus)
+
+    HAA = np.dot(np.dot(H, Aol), Aol)
+
+    P_new = np.concatenate((P_plus,P_minus),axis=0)
+    H_new = np.concatenate((HAA,HAA),axis=0)
+
+    halfspaces = np.concatenate((H_new,P_new), axis=1)
+
+    return h2v_representation(halfspaces, np.array([0,0]))
+
+def Event_Set_3(HP:np.array, Aol:np.array, w:np.array) -> ConvexHull:
+    
+    w_plus = np.array([[w[0,0]],[w[1,0]]])
+    w_minus = np.array([[w[0,1]],[w[1,1]]])
+
+    H = HP[:,:-1]
+    P = np.reshape(HP[:,-1],(H.shape[0],1))
+
+    E_star = np.dot(Aol,Aol) + Aol + np.eye(Aol.shape[0])
+
+    P_plus = P - np.dot(np.dot(H,E_star), w_plus)
+    P_minus = P - np.dot(np.dot(H,E_star), w_minus)
+
+    HAA = np.dot(np.dot(H, np.dot(Aol,Aol)), Aol)
+
+    P_new = np.concatenate((P_plus,P_minus),axis=0)
+    H_new = np.concatenate((HAA,HAA),axis=0)
+
+    halfspaces = np.concatenate((H_new,P_new), axis=1)
+
+    return h2v_representation(halfspaces, np.array([0,0]))
 
 def h2v_representation(HP:np.array, inner_point:np.array) -> ConvexHull:
     
@@ -73,47 +141,46 @@ def mRPI(Acl:Matrix, w:SetOfPoints, I:SetOfPoints, max_iteration:int = 10) -> Co
 
     return PHI
 
-def whether_inside(matrix_inequality:Matrix, vector:np.array) -> boolean:
-
+def whether_inside(ES:ConvexHull, x:np.array) -> boolean:
     '''
     Returns whether or not the point is inside the envelope
     True: It is inside
     False: It is NOT inside
     '''
 
-    statement = True
+    hull_path = Path(ES.points)
     
-    for lines in matrix_inequality:
+    return hull_path.contains_point(x)
 
-        result = np.inner(lines[:-1],vector) - lines[-1]
-        if result < 0: statement = False
-
-    return statement
 
 def main():
 
     ## Inputs ##
     
-    # Dynamic controled matrix (eig must lie inside the unit circle)
+    # Open Loop matrix 
+    Aol = np.array([[1.000, 0.650],
+                    [0.000, 1.000]])
+
+    # Dynamic controled matrix A - BK 
     Acl = np.array([[0.879, 0.393],
                     [-0.374, 0.209]])
 
-    # Disturbances ranges (a n-uple for each system dimension)
+    # Disturbances ranges (here E is eye(dim(x)))
     w = np.array([[0.211,-0.211],[0.65,-0.65]])
 
     # First RPI guess set vertices
     I = np.array([[5,-5],[5,-5]])
 
-    # Just to see if the selected point lies inside the calculated mRPI
+    # See if the selected point lies inside the calculated mRPI
     test_point = np.array([0.5,1.075])
 
-    ## Code per se
+    ## Code per se ##
 
     phi = mRPI(Acl, w, I, 50)
 
     #print(whether_inside(phi.equations, test_point))
 
-    ES = Event_Set(np.array(phi.equations), Acl, w)
+    ES = Event_Set(np.array(phi.equations), Aol, w)
 
     plt.figure()
     for simplex in phi.simplices:
@@ -129,7 +196,3 @@ def main():
 if __name__ == '__main__':
 
     main()
-
-
-
-
