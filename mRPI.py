@@ -183,30 +183,32 @@ class SystemType(Enum):
     TwoByTwo = auto()
     ThreeByThree = auto()
 
-
 def main():
 
-    ## Inputs ##
+    system = SystemType.TwoByTwo
 
-    # Open Loop matrix 
-    Aol = np.array([[1.000, 0.650],
-                    [0.000, 1.000]])
+    if system == SystemType.TwoByTwo:
+        ## Inputs ##
 
-	B=np.array([[.211],[.65]])
-	K=np.array([[.575, 1.217]])
-    # Dynamic controled matrix A - BK (eig must lie inside the unit circle)
-	Acl = Aol-B*K
-	#Acl = np.array([[0.879, 0.393],
-	#                [-0.374, 0.209]])
+        # Open Loop matrix
+        Aol = np.array([[1.000, 0.650],
+                        [0.000, 1.000]])
 
-    # Disturbances ranges (here E is eye(dim(x)))
-    w = np.array([[0.211,-0.211],[0.65,-0.65]])
+        B=np.array([[.211],[.65]])
+        K=np.array([[.575, 1.217]])
+        # Dynamic controled matrix A - BK (eig must lie inside the unit circle)
+        Acl = Aol-B*K
+        #Acl = np.array([[0.879, 0.393],
+        #                [-0.374, 0.209]])
 
-	# Disturbances ranges (a n-uple for each system dimension)
-	w = np.array([[0.211,-0.211],[0.65,-0.65]])
+        # Disturbances ranges (a n-uple for each system dimension)
+        w = np.array([[0.211,-0.211],[0.65,-0.65]])
 
-    # See if the selected point lies inside the calculated mRPI
-    test_point = np.array([0.5,1.075])
+        # First RPI guess set vertices
+        I = np.array([[5,-5],[5,-5]])
+
+        # See if the selected point lies inside the calculated mRPI
+        test_point = np.array([0.5,1.075])
 
     elif system == SystemType.ThreeByThree:
         # Dynamic controled matrix (eig must lie inside the unit circle)
